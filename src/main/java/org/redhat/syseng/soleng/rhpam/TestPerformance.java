@@ -1,10 +1,10 @@
 package org.redhat.syseng.soleng.rhpam;
 
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.errors.GitAPIException;
-
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.*;
@@ -20,9 +20,9 @@ public class TestPerformance {
     @GET
     @javax.ws.rs.Path("/")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response test() {
+    public Response test(@DefaultValue("true") @QueryParam("multiCommit") boolean multiCommit) {
         try {
-            logger.info("Starting");
+            logger.info("Starting with multiCommit " + multiCommit);
             Path gitPath = FileSystems.getDefault().getPath("/deployments/data/jgit");
             createGitDirectory(gitPath);
 
@@ -32,10 +32,13 @@ public class TestPerformance {
             git.commit().setMessage("Empty git repo").call();
 
             createDirectoryStructure(gitPath, "/dirs.txt");
-            createFiles(gitPath, "/files.txt");
+            createFiles(gitPath, multiCommit, "/files.txt");
 
-            git.add().addFilepattern(gitPath.resolve("IT-Orders").getFileName().toString()).call();
-            git.commit().setMessage("Created samples").call();
+            if( !multiCommit )
+            {
+                git.add().addFilepattern(gitPath.resolve("IT-Orders").getFileName().toString()).call();
+                git.commit().setMessage("Created samples").call();
+            }
 
             long elapsed = System.currentTimeMillis() - start;
             logger.info("Finished after " + elapsed + " milliseconds!");
@@ -80,16 +83,21 @@ public class TestPerformance {
         });
     }
 
-    private void createFiles(Path gitPath, String fileList) {
+    private void createFiles(Path gitPath, boolean multiCommit, String fileList) throws IOException {
+        Git git = Git.open(new File(gitPath.toFile(), ".git"));
         InputStream fileListStream = getClass().getResourceAsStream(fileList);
         new BufferedReader(new InputStreamReader(fileListStream)).lines().forEach(fileName -> {
             try {
-                logger.info("File " + fileName + " will be created");
                 PrintWriter printWriter = new PrintWriter( new FileWriter(gitPath.resolve(fileName).toFile()) );
                 InputStream fileContentStream = getClass().getResourceAsStream("/" + fileName);
                 new BufferedReader(new InputStreamReader(fileContentStream)).lines().forEach(printWriter::println);
                 printWriter.close();
-            } catch (IOException e) {
+                if( multiCommit )
+                {
+                    git.add().addFilepattern(gitPath.resolve(fileName).getFileName().toString()).call();
+                    git.commit().setMessage("Committed " + fileName).call();
+                }
+            } catch (Exception e) {
                 logger.log(Level.SEVERE, "Failed to create " + gitPath.resolve(fileName), e);
             }
         });
