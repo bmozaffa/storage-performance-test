@@ -33,7 +33,23 @@ To create a new OpenShift project and run this test using ephemeral storage that
 ````
 $ oc new-project storage-performance
 $ oc new-app --docker-image=docker-registry.engineering.redhat.com/bmozaffa/storage-performance --name=performance-test
+````
+
+To run the test where files added to the directory are added to the repo in individual commits, resulting in more writes and slower performance:
+
+````
 $ for i in {1..10}; do curl performance-test.storage-performance.svc.cluster.local:8080; done
+````
+
+Alternatively, to copy all files to the directory, but add them in a single commit at the end:
+
+````
+$ for i in {1..10}; do curl performance-test.storage-performance.svc.cluster.local:8080/?multiCommit=false; done
+````
+
+Look at the pod log to see the performance:
+
+````
 $ oc get pods -o name | xargs -I pod oc logs pod
 ````
 
@@ -43,9 +59,4 @@ To switch to a persistent volume claim separately created and called "storage-te
 $ oc volume dc/performance-test --add --name=storage-test --type=persistentVolumeClaim --claim-name=storage-test --mount-path=/deployments/data
 ````
 
-Then test again:
-
-````
-$ for i in {1..10}; do curl performance-test.storage-performance.svc.cluster.local:8080; done
-$ oc get pods -o name | xargs -I pod oc logs -f pod
-````
+Then test again and compare numbers.
